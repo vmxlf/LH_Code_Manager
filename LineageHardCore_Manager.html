@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lineage Hard Core Save Manager</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #11151c;
+      --panel: #1a202a;
+      --panel-2: #202936;
+      --border: #303b4b;
+      --text: #eef2f7;
+      --muted: #9ba8b9;
+      --accent: #65a8ff;
+      --accent-2: #2f78d0;
+      --success: #66d39a;
+      --danger: #ff7d7d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #202a38 0, var(--bg) 46rem);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+    }
+
+    .app {
+      width: min(1100px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 34px 0 60px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-end;
+      margin-bottom: 22px;
+    }
+
+    h1 { margin: 0 0 7px; font-size: clamp(24px, 4vw, 34px); letter-spacing: -.03em; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 14px; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      padding: 15px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(26, 32, 42, .92);
+      box-shadow: 0 14px 38px rgba(0, 0, 0, .22);
+    }
+
+    button {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 9px 13px;
+      color: var(--text);
+      background: var(--panel-2);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s, transform .15s;
+    }
+
+    button:hover { border-color: var(--accent); background: #29384b; }
+    button:active { transform: translateY(1px); }
+    button.primary { border-color: var(--accent-2); background: var(--accent-2); }
+    button.primary:hover { background: #398be7; }
+    button:disabled { opacity: .55; cursor: default; transform: none; }
+
+    .folder-name {
+      min-width: 180px;
+      flex: 1;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .hint {
+      margin: 14px 0 22px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .status {
+      min-height: 20px;
+      margin: 12px 2px 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .status.error { color: var(--danger); }
+    .status.success { color: var(--success); }
+
+    .save-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+      gap: 15px;
+    }
+
+    .save-card {
+      min-width: 0;
+      padding: 17px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(32, 41, 54, .97), rgba(24, 29, 39, .97));
+      box-shadow: 0 11px 28px rgba(0, 0, 0, .18);
+    }
+
+    .card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+    }
+
+    .account { font-size: 17px; font-weight: 700; }
+    .file-name {
+      max-width: 245px;
+      margin-top: 3px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .level {
+      flex: 0 0 auto;
+      padding: 5px 9px;
+      border: 1px solid #476789;
+      border-radius: 999px;
+      color: #c9e2ff;
+      background: #203b59;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px 11px;
+      min-height: 37px;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .meta span + span::before { content: "·"; margin-right: 11px; color: #5a6b80; }
+
+    .code-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .code-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid #344357;
+      border-radius: 9px;
+      background: rgba(12, 16, 22, .58);
+    }
+
+    .code-label {
+      flex: 0 0 43px;
+      color: #a9cdf3;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    code {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      color: #e5edf7;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .copy-code {
+      flex: 0 0 auto;
+      padding: 6px 9px;
+      font-size: 11px;
+    }
+
+    .card-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 11px;
+    }
+    .copy-all { padding: 7px 10px; font-size: 12px; }
+
+    .empty {
+      padding: 54px 20px;
+      border: 1px dashed #3b4a5e;
+      border-radius: 14px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    .footer-note {
+      margin-top: 25px;
+      color: #748296;
+      font-size: 11px;
+      line-height: 1.65;
+    }
+
+    @media (max-width: 650px) {
+      .app { width: min(100% - 20px, 1100px); padding-top: 23px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .save-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <h1>Lineage Hard Core 세이브 관리자</h1>
+        <p class="subtitle">구버전(1.28.5) 저장 파일의 Code1, Code2를 빠르게 복사합니다.</p>
+      </div>
+    </header>
+
+    <section class="toolbar" aria-label="폴더 관리">
+      <button id="chooseFolder" class="primary" type="button">세이브 폴더 열기</button>
+      <button id="refresh" type="button" disabled>새로고침</button>
+      <span id="folderName" class="folder-name">폴더를 선택해 주세요</span>
+    </section>
+
+    <p class="hint">
+      처음 한 번만 <strong>Step ver\Lineage Hard Core</strong> 폴더를 선택하면 됩니다.
+      저장 파일의 Lv가 있는 항목만 표시합니다. 게임에서 먼저 <code>-load</code>를 입력한 뒤,
+      Code1·Code2 행의 버튼을 위에서부터 각각 눌러 붙여넣으세요.
+    </p>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <section id="saveGrid" class="save-grid" aria-label="세이브 목록">
+      <div class="empty">세이브 폴더를 선택하면 저장 파일이 여기에 표시됩니다.</div>
+    </section>
+
+    <p class="footer-note">
+      각 행의 복사 버튼은 게임에서 요구하는 코드 문자열 자체만 복사합니다. 전체 복사는 Code1, Code2 순서로 줄바꿈해 넣습니다.
+    </p>
+  </main>
+
+  <script>
+    'use strict';
+
+    const DB_NAME = 'LineageHardCoreManagerDB';
+    const DB_STORE = 'settings';
+    const DB_KEY = 'saveFolder';
+    const folderNameEl = document.getElementById('folderName');
+    const statusEl = document.getElementById('status');
+    const saveGridEl = document.getElementById('saveGrid');
+    const chooseFolderButton = document.getElementById('chooseFolder');
+    const refreshButton = document.getElementById('refresh');
+    let folderHandle = null;
+
+    function setStatus(message, kind = '') {
+      statusEl.textContent = message;
+      statusEl.className = `status${kind ? ` ${kind}` : ''}`;
+    }
+
+    function openDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = () => request.result.createObjectStore(DB_STORE);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function saveFolderHandle(handle) {
+      const db = await openDb();
+      await new Promise((resolve, reject) => {
+        const request = db.transaction(DB_STORE, 'readwrite').objectStore(DB_STORE).put(handle, DB_KEY);
+        request.onsuccess = resolve;
+        request.onerror = () => reject(request.error);
+      });
+      db.close();
+    }
+
+    async function readFolderHandle() {
+      const db = await openDb();
+      const handle = await new Promise((resolve, reject) => {
+        const request = db.transaction(DB_STORE, 'readonly').objectStore(DB_STORE).get(DB_KEY);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+      });
+      db.close();
+      return handle;
+    }
+
+    async function hasReadPermission(handle, request = false) {
+      if (!handle) return false;
+      const options = { mode: 'read' };
+      if (await handle.queryPermission(options) === 'granted') return true;
+      return request && await handle.requestPermission(options) === 'granted';
+    }
+
+    function firstMatch(text, regex, fallback = '') {
+      const match = text.match(regex);
+      return match ? match[1].trim() : fallback;
+    }
+
+    function numberValue(value) {
+      const normalized = String(value || '').replace(/,/g, '');
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString('ko-KR');
+    }
+
+    function parseSave(text, fileName) {
+      // A Lineage save stores one payload per line: Code1, Code2, ... Code30.
+      const codeParts = [];
+      const codeRegex = /Preload\(\s*"\s*Code(\d+):\s*([^"\r\n]*?)\s*"\s*\)/g;
+      for (const match of text.matchAll(codeRegex)) {
+        codeParts.push({ index: Number(match[1]), value: match[2].trim() });
+      }
+      codeParts.sort((a, b) => a.index - b.index);
+      if (!codeParts.length) return null;
+
+      const levelText = firstMatch(text, /Preload\(\s*"\s*Lv:\s*(\d+)\s*"\s*\)/);
+      const isLineageSave = Boolean(levelText) || text.includes('Data Stats') || /-save\s+/i.test(text);
+      // Ignore unrelated text files (and hand-made code-only helper files).
+      if (!isLineageSave) return null;
+
+      const stem = fileName.replace(/\.[^.]+$/, '');
+      const account = (stem.split('__')[0] || stem || '알 수 없음').trim();
+      const timestampMatch = stem.match(/__(\d{9,})$/);
+      const timestamp = timestampMatch ? Number(timestampMatch[1]) : 0;
+
+      return {
+        fileName,
+        account,
+        timestamp,
+        level: numberValue(levelText),
+        className: firstMatch(text, /Preload\(\s*"\s*클래스:\s*([^"\r\n]*)\s*"\s*\)/, '미상'),
+        adena: numberValue(firstMatch(text, /Preload\(\s*"\s*아데나:\s*([\d,]+)\s*"\s*\)/)),
+        score: numberValue(firstMatch(text, /Preload\(\s*"\s*점수:\s*([\d,]+)\s*"\s*\)/)),
+        bossKills: numberValue(firstMatch(text, /Preload\(\s*"\s*보스 킬수:\s*([\d,]+)\s*"\s*\)/)),
+        codeParts,
+      };
+    }
+
+    function makeMeta(save) {
+      const entries = [
+        ['클래스', save.className],
+        ['아데나', formatNumber(save.adena)],
+      ];
+      if (save.score) entries.push(['점수', formatNumber(save.score)]);
+      if (save.bossKills) entries.push(['보스 킬', formatNumber(save.bossKills)]);
+      return entries;
+    }
+
+    function makeButton(label, className, handler) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = className;
+      button.textContent = label;
+      button.addEventListener('click', handler);
+      return button;
+    }
+
+    async function copyText(value, button) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = value;
+          textarea.style.position = 'fixed';
+          textarea.style.left = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          if (!document.execCommand('copy')) throw new Error('copy failed');
+          textarea.remove();
+        }
+        const previous = button.textContent;
+        button.textContent = '복사됨';
+        button.disabled = true;
+        setStatus('코드를 클립보드에 복사했습니다.', 'success');
+        setTimeout(() => { button.textContent = previous; button.disabled = false; }, 1200);
+      } catch (error) {
+        setStatus('클립보드 복사에 실패했습니다. 코드를 직접 선택해 복사해 주세요.', 'error');
+      }
+    }
+
+    function renderSave(save) {
+      const card = document.createElement('article');
+      card.className = 'save-card';
+
+      const head = document.createElement('div');
+      head.className = 'card-head';
+      const identity = document.createElement('div');
+      const account = document.createElement('div');
+      account.className = 'account';
+      account.textContent = save.account;
+      const fileName = document.createElement('div');
+      fileName.className = 'file-name';
+      fileName.textContent = save.fileName;
+      fileName.title = save.fileName;
+      identity.append(account, fileName);
+      const level = document.createElement('div');
+      level.className = 'level';
+      level.textContent = `Lv.${save.level || '-'}`;
+      head.append(identity, level);
+      card.appendChild(head);
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      for (const [label, value] of makeMeta(save)) {
+        const item = document.createElement('span');
+        item.textContent = `${label}: ${value}`;
+        meta.appendChild(item);
+      }
+      card.appendChild(meta);
+
+      const codeList = document.createElement('div');
+      codeList.className = 'code-list';
+      for (const part of save.codeParts) {
+        const row = document.createElement('div');
+        row.className = 'code-row';
+        const label = document.createElement('span');
+        label.className = 'code-label';
+        label.textContent = `Code${part.index}`;
+        const code = document.createElement('code');
+        code.textContent = part.value;
+        code.title = part.value;
+        const copy = makeButton(`Code${part.index} 복사`, 'copy-code', () => copyText(part.value, copy));
+        row.append(label, code, copy);
+        codeList.appendChild(row);
+      }
+      card.appendChild(codeList);
+
+      const actions = document.createElement('div');
+      actions.className = 'card-actions';
+      const allCode = save.codeParts.map(part => part.value).join('\n');
+      const copyAll = makeButton('전체 코드 복사', 'copy-all', () => copyText(allCode, copyAll));
+      actions.appendChild(copyAll);
+      card.appendChild(actions);
+      return card;
+    }
+
+    async function readSaves() {
+      if (!folderHandle) return;
+      const saves = [];
+      for await (const entry of folderHandle.values()) {
+        if (entry.kind !== 'file' || !/\.txt$/i.test(entry.name)) continue;
+        try {
+          const file = await entry.getFile();
+          const save = parseSave(await file.text(), entry.name);
+          if (save) saves.push(save);
+        } catch (error) {
+          console.warn(`파일을 읽지 못했습니다: ${entry.name}`, error);
+        }
+      }
+      saves.sort((a, b) => b.level - a.level || b.timestamp - a.timestamp || a.fileName.localeCompare(b.fileName));
+      saveGridEl.replaceChildren();
+      if (!saves.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = '이 폴더에서 리니지 하드코어 세이브 파일을 찾지 못했습니다.';
+        saveGridEl.appendChild(empty);
+      } else {
+        for (const save of saves) saveGridEl.appendChild(renderSave(save));
+      }
+      setStatus(`${saves.length}개의 세이브를 불러왔습니다.`);
+    }
+
+    async function useFolder(handle, askPermission = false) {
+      if (!await hasReadPermission(handle, askPermission)) {
+        setStatus('폴더 읽기 권한이 필요합니다. 폴더를 다시 선택해 주세요.', 'error');
+        return;
+      }
+      folderHandle = handle;
+      folderNameEl.textContent = handle.name;
+      folderNameEl.title = handle.name;
+      refreshButton.disabled = false;
+      await readSaves();
+    }
+
+    chooseFolderButton.addEventListener('click', async () => {
+      if (!window.showDirectoryPicker) {
+        setStatus('이 브라우저는 폴더 선택 기능을 지원하지 않습니다. Chrome 또는 Edge를 사용해 주세요.', 'error');
+        return;
+      }
+      try {
+        const handle = await window.showDirectoryPicker({
+          id: 'lineage_hardcore_folder',
+          mode: 'read',
+          startIn: 'documents',
+        });
+        await saveFolderHandle(handle);
+        await useFolder(handle, false);
+      } catch (error) {
+        if (error && error.name !== 'AbortError') setStatus('폴더를 열지 못했습니다.', 'error');
+      }
+    });
+
+    refreshButton.addEventListener('click', () => readSaves().catch(() => setStatus('세이브를 새로 읽지 못했습니다.', 'error')));
+
+    (async () => {
+      try {
+        const savedHandle = await readFolderHandle();
+        if (savedHandle) {
+          folderNameEl.textContent = `${savedHandle.name} (권한 확인 필요)`;
+          await useFolder(savedHandle, false);
+        }
+      } catch (error) {
+        console.warn('저장된 폴더 정보를 읽지 못했습니다.', error);
+      }
+    })();
+  </script>
+</body>
+</html>
