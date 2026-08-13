@@ -58,6 +58,25 @@
       box-shadow: 0 14px 38px rgba(0, 0, 0, .22);
     }
 
+    .toolbar-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toolbar-toggle input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--accent-2);
+      cursor: pointer;
+    }
+
     button {
       border: 1px solid var(--border);
       border-radius: 9px;
@@ -159,6 +178,47 @@
     }
     .meta span + span::before { content: "·"; margin-right: 11px; color: #5a6b80; }
 
+    .items-section {
+      margin: 2px 0 14px;
+      padding: 10px;
+      border: 1px solid #344357;
+      border-radius: 9px;
+      background: rgba(12, 16, 22, .36);
+    }
+
+    .items-heading {
+      margin-bottom: 7px;
+      color: #b9d8fa;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .item-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 5px 12px;
+    }
+
+    .item-row {
+      min-width: 0;
+      color: #dce6f2;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .item-label {
+      color: #8fb9e8;
+      font-weight: 700;
+    }
+
+    .item-value { color: #e8eef6; }
+
+    .items-empty {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
     .code-list {
       display: flex;
       flex-direction: column;
@@ -243,12 +303,16 @@
       <button id="chooseFolder" class="primary" type="button">세이브 폴더 열기</button>
       <button id="refresh" type="button" disabled>새로고침</button>
       <span id="folderName" class="folder-name">폴더를 선택해 주세요</span>
+      <label class="toolbar-toggle" for="showItems">
+        <input id="showItems" type="checkbox">
+        <span>아이템 정보 보기</span>
+      </label>
     </section>
 
     <p class="hint">
       처음 한 번만 <strong>Step ver\Lineage Hard Core</strong> 폴더를 선택하면 됩니다.
-      저장 파일의 Lv가 있는 항목만 표시합니다. 게임에서 먼저 <code>-load</code>를 입력한 뒤,
-      Code1·Code2 행의 버튼을 위에서부터 각각 눌러 붙여넣으세요.
+      Lv와 Data Stats가 없는 코드 백업 파일도 함께 표시합니다. 게임에서 먼저 <code>-load</code>를 입력한 뒤,
+      Code 행의 버튼을 위에서부터 각각 눌러 붙여넣으세요. 아이템 정보는 오른쪽 선택란으로 켜고 끌 수 있습니다.
     </p>
 
     <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -272,7 +336,21 @@
     const saveGridEl = document.getElementById('saveGrid');
     const chooseFolderButton = document.getElementById('chooseFolder');
     const refreshButton = document.getElementById('refresh');
+    const showItemsCheckbox = document.getElementById('showItems');
     let folderHandle = null;
+    let showItems = false;
+
+    function updateItemVisibility() {
+      document.querySelectorAll('.items-section').forEach((section) => {
+        section.hidden = !showItems;
+      });
+      showItemsCheckbox.checked = showItems;
+    }
+
+    showItemsCheckbox.addEventListener('change', () => {
+      showItems = showItemsCheckbox.checked;
+      updateItemVisibility();
+    });
 
     function setStatus(message, kind = '') {
       statusEl.textContent = message;
@@ -331,6 +409,39 @@
       return Number(value || 0).toLocaleString('ko-KR');
     }
 
+    function stripColorCodes(value) {
+      return String(value || '')
+        .replace(/\|c[0-9a-f]{8}/gi, '')
+        .replace(/\|r/gi, '')
+        .trim();
+    }
+
+    function displayItemLabel(label) {
+      const labels = [
+        [/^BagItem(?:\(\d+\))?(\d*)$/, '배낭'],
+        [/^BoxItem(?:\(\d+\))?(\d*)$/, '보관함'],
+        [/^PetItem(\d*)$/, '펫 장비'],
+      ];
+      for (const [pattern, name] of labels) {
+        const match = label.match(pattern);
+        if (match) return `${name}${match[1] || ''}`;
+      }
+      return label;
+    }
+
+    function parseItems(text) {
+      const items = [];
+      const payloadRegex = /Preload\(\s*"\s*([^"\r\n]*)\s*"\s*\)/g;
+      const itemRegex = /^(무기|갑옷|망토|투구|장갑|티셔츠|각반|벨트|목걸이|귀걸이\d*|반지\d*|인형|BagItem(?:\(\d+\))?\d*|BoxItem(?:\(\d+\))?\d*|PetItem\d*)\s*:\s*(.+)$/;
+      for (const match of text.matchAll(payloadRegex)) {
+        const itemMatch = match[1].trim().match(itemRegex);
+        if (!itemMatch) continue;
+        const value = stripColorCodes(itemMatch[2]);
+        if (value) items.push({ label: displayItemLabel(itemMatch[1]), value });
+      }
+      return items;
+    }
+
     function parseSave(text, fileName) {
       // A Lineage save stores one payload per line: Code1, Code2, ... Code30.
       const codeParts = [];
@@ -342,13 +453,12 @@
       if (!codeParts.length) return null;
 
       const levelText = firstMatch(text, /Preload\(\s*"\s*Lv:\s*(\d+)\s*"\s*\)/);
-      const isLineageSave = Boolean(levelText) || text.includes('Data Stats') || /-save\s+/i.test(text);
-      // Ignore unrelated text files (and hand-made code-only helper files).
-      if (!isLineageSave) return null;
+      // 이 폴더의 .txt는 코드만 남긴 백업 파일도 세이브로 취급한다.
+      // (예: vmxlf1__1291053167_WIS86.txt)
 
       const stem = fileName.replace(/\.[^.]+$/, '');
       const account = (stem.split('__')[0] || stem || '알 수 없음').trim();
-      const timestampMatch = stem.match(/__(\d{9,})$/);
+      const timestampMatch = stem.match(/__(\d{9,})(?:_|$)/);
       const timestamp = timestampMatch ? Number(timestampMatch[1]) : 0;
 
       return {
@@ -360,6 +470,7 @@
         adena: numberValue(firstMatch(text, /Preload\(\s*"\s*아데나:\s*([\d,]+)\s*"\s*\)/)),
         score: numberValue(firstMatch(text, /Preload\(\s*"\s*점수:\s*([\d,]+)\s*"\s*\)/)),
         bossKills: numberValue(firstMatch(text, /Preload\(\s*"\s*보스 킬수:\s*([\d,]+)\s*"\s*\)/)),
+        items: parseItems(text),
         codeParts,
       };
     }
@@ -437,6 +548,38 @@
         meta.appendChild(item);
       }
       card.appendChild(meta);
+
+      const itemsSection = document.createElement('section');
+      itemsSection.className = 'items-section';
+      itemsSection.hidden = !showItems;
+      const itemsHeading = document.createElement('div');
+      itemsHeading.className = 'items-heading';
+      itemsHeading.textContent = `아이템 정보 (${save.items.length}개)`;
+      itemsSection.appendChild(itemsHeading);
+
+      if (!save.items.length) {
+        const emptyItems = document.createElement('div');
+        emptyItems.className = 'items-empty';
+        emptyItems.textContent = '이 파일에는 저장된 아이템 정보가 없습니다.';
+        itemsSection.appendChild(emptyItems);
+      } else {
+        const itemList = document.createElement('div');
+        itemList.className = 'item-list';
+        for (const item of save.items) {
+          const row = document.createElement('div');
+          row.className = 'item-row';
+          const label = document.createElement('span');
+          label.className = 'item-label';
+          label.textContent = `${item.label}: `;
+          const value = document.createElement('span');
+          value.className = 'item-value';
+          value.textContent = item.value;
+          row.append(label, value);
+          itemList.appendChild(row);
+        }
+        itemsSection.appendChild(itemList);
+      }
+      card.appendChild(itemsSection);
 
       const codeList = document.createElement('div');
       codeList.className = 'code-list';
