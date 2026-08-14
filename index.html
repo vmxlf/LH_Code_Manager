@@ -615,12 +615,19 @@
         try {
           const file = await entry.getFile();
           const save = parseSave(await file.text(), entry.name);
-          if (save) saves.push(save);
+          if (save) {
+            // File System Access API가 제공하는 실제 파일 시각(밀리초).
+            // 브라우저에서는 Windows의 생성 시각을 직접 읽을 수 없으므로
+            // 새로 생성된 세이브에 가장 가까운 lastModified를 사용한다.
+            save.fileTimestamp = Number(file.lastModified) || 0;
+            saves.push(save);
+          }
         } catch (error) {
           console.warn(`파일을 읽지 못했습니다: ${entry.name}`, error);
         }
       }
-      saves.sort((a, b) => b.level - a.level || b.timestamp - a.timestamp || a.fileName.localeCompare(b.fileName));
+      // 파일명 숫자가 아니라 실제 파일 시각을 기준으로 최신 파일부터 표시한다.
+      saves.sort((a, b) => b.fileTimestamp - a.fileTimestamp || b.level - a.level || a.fileName.localeCompare(b.fileName));
       saveGridEl.replaceChildren();
       if (!saves.length) {
         const empty = document.createElement('div');
